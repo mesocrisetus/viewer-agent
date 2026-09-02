@@ -128,6 +128,12 @@ python -m venv .venv
           «desconectado» y puedes borrarlo en <b>Equipos y altas</b>.
           Para desinstalar en el equipo: <code>"C:\ProgramData\ViewerAgent\viewer-agent.exe" --uninstall</code>.
         </p>
+        <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+          <b>Antivirus:</b> el instalador ya añade las exclusiones de Windows Defender.
+          Para Kaspersky (o volver a aplicarlas):{' '}
+          <a href="/download/install/av-exclusions.ps1">av-exclusions.ps1</a>{' · '}
+          <a href="/download/install/EXCLUSIONES.md">guía paso a paso</a>.
+        </p>
       </div>
 
       {/* ---- Linux / macOS ---- */}

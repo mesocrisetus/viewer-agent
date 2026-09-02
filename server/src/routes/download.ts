@@ -160,6 +160,18 @@ export async function agentDownloadRoutes(app: FastifyInstance) {
     return reply;
   });
 
+  // Utilidades de instalación (script de exclusiones AV, guía).
+  app.get('/download/install/:file', async (req, reply) => {
+    const { file } = z
+      .object({ file: z.enum(['av-exclusions.ps1', 'EXCLUSIONES.md']) })
+      .parse(req.params);
+    const full = path.join(AGENT_SRC, 'install', file);
+    if (!existsSync(full)) return reply.code(404).send({ error: 'no encontrado' });
+    reply.header('Content-Type', file.endsWith('.md') ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8');
+    reply.header('Content-Disposition', `attachment; filename="${file}"`);
+    return reply.send(createReadStream(full));
+  });
+
   // Descarga directa de binarios ya compilados en agent/dist/.
   app.get('/download/agent/:file', async (req, reply) => {
     const { file } = z.object({ file: z.string().regex(/^[\w.\-]+$/) }).parse(req.params);
