@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      PANEL_ORIGIN: ${PANEL_ORIGIN}
+      PORT: ${PORT}
+      HOST: ${HOST}
+      DATA_DIR: /data
+      AGENT_DIST_DIR: /agent
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+    volumes:
+      # Las capturas viven en el host, fuera de cualquier imagen: sobreviven a
+      # cada actualización del servicio.
+      - ./data:/data
+      # Código/binarios del agente que se ofrecen en la página de descargas.
+      - ../agent:/agent:ro
+
+  nginx:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.panel
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      PANEL_SERVER_NAME: ${PANEL_SERVER_NAME}
+    ports:
+      - "80:80"
+    # Para HTTPS: monta aquí tus certificados y añade el bloque 443 en nginx.conf,
+    # o pon este servicio detrás de un proxy TLS (Caddy, Traefik, el de tu balanceador).
+    # volumes:
+    #   - ./certs:/etc/nginx/certs:ro
+
+volumes:
+  db-data:

@@ -1,0 +1,21 @@
+[project]
+name = "vigia-agent"
+version = "0.1.0"
+description = "Agente de monitorización declarada para la plataforma Vigía"
+requires-python = ">=3.10"
+dependencies = [
+  "requests>=2.31",
+  "mss>=9.0.1",
+  "Pillow>=10.2",
+  "pynput>=1.7.6",
+  "pystray>=0.19.5",
+  "psutil>=5.9",
+  "websocket-client>=1.7",
+]
+
+[project.scripts]
+vigia-agent = "vigia_agent.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

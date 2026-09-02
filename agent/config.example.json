@@ -1,0 +1,5 @@
+{
+  "serverUrl": "https://vigia.miempresa.com",
+  "enrollToken": "PEGA-AQUI-EL-TOKEN-DE-ALTA",
+  "verifyTls": true
+}

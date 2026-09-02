@@ -1,0 +1,14 @@
+# Panel Vigía compilado + Nginx (sirve estáticos y hace de proxy al servidor)
+FROM node:20-bookworm-slim AS build
+WORKDIR /app
+COPY panel/package.json panel/package-lock.json* ./
+RUN npm install --no-audit --no-fund
+COPY panel/ ./
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY deploy/nginx.conf /etc/nginx/templates/default.conf.template
+COPY --from=build /app/dist /usr/share/nginx/html
+# nginx:alpine ya sustituye variables de entorno en /etc/nginx/templates/*.template
+ENV PANEL_SERVER_NAME=_
+EXPOSE 80

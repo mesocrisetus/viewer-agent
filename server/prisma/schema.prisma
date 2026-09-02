@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         String   @default("admin") // admin | viewer
+  createdAt    DateTime @default(now())
+  lastLoginAt  DateTime?
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  devices   Device[]
+  tokens    EnrollToken[]
+}
+
+model EnrollToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  label     String
+  team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  teamId    String?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+  usedAt    DateTime?
+  usedByDeviceId String?
+  reusable  Boolean   @default(false)
+  useCount  Int       @default(0)
+}
+
+model Device {
+  id                String   @id @default(uuid())
+  secretHash        String
+  hostname          String
+  os                String   // windows | linux | macos
+  osVersion         String   @default("")
+  username          String   @default("")
+  agentVersion      String   @default("")
+  team              Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  teamId            String?
+  enrolledAt        DateTime @default(now())
+  lastSeenAt        DateTime?
+  consentAcceptedAt DateTime?
+  disabled          Boolean  @default(false)
+  paused            Boolean  @default(false)
+
+  screenshots   Screenshot[]
+  activity      ActivitySample[]
+  keyboard      KeyboardEvent[]
+  alerts        Alert[]
+
+  @@index([teamId])
+  @@index([lastSeenAt])
+}
+
+model Screenshot {
+  id         String   @id @default(uuid())
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId   String
+  capturedAt DateTime
+  monitor    Int      @default(0)
+  path       String
+  thumbPath  String
+  width      Int      @default(0)
+  height     Int      @default(0)
+  bytes      Int      @default(0)
+
+  @@index([deviceId, capturedAt])
+}
+
+model ActivitySample {
+  id           String   @id @default(uuid())
+  device       Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId     String
+  startedAt    DateTime
+  endedAt      DateTime
+  durationSec  Int
+  appName      String
+  windowTitle  String   @default("")
+  url          String   @default("")
+  keyboardCount Int     @default(0)
+  mouseCount   Int      @default(0)
+  idleSec      Int      @default(0)
+  category     String   @default("neutral") // productive | unproductive | neutral
+
+  @@index([deviceId, startedAt])
+  @@index([category])
+}
+
+model KeyboardEvent {
+  id          String   @id @default(uuid())
+  device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId    String
+  at          DateTime
+  kind        String   // activity | text
+  keysCount   Int      @default(0)
+  specialKeys String   @default("") // lista separada por comas
+  textChunk   String?
+
+  @@index([deviceId, at])
+}
+
+model ProductivityRule {
+  id        String   @id @default(uuid())
+  matchType String   // app | domain | title_regex
+  pattern   String
+  category  String   // productive | unproductive | neutral
+  priority  Int      @default(100)
+  forbidden Boolean  @default(false) // dispara alerta forbidden_app
+  createdAt DateTime @default(now())
+
+  @@index([priority])
+}
+
+model Alert {
+  id             String    @id @default(uuid())
+  device         Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId       String
+  type           String    // agent_offline | forbidden_app
+  message        String
+  createdAt      DateTime  @default(now())
+  acknowledgedAt DateTime?
+
+  @@index([deviceId, createdAt])
+  @@index([acknowledgedAt])
+}
+
+model Setting {
+  key   String @id
+  value String
+}

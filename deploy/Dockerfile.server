@@ -1,0 +1,25 @@
+# Servidor Vigía (API + relay + retención)
+FROM node:20-bookworm-slim AS base
+WORKDIR /app
+# sharp necesita estas libs en tiempo de ejecución
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base AS deps
+COPY server/package.json server/package-lock.json* ./
+RUN npm install --no-audit --no-fund
+
+FROM deps AS build
+COPY server/ ./
+RUN npx prisma generate && npm run build
+
+FROM base AS runtime
+ENV NODE_ENV=production
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/package.json ./package.json
+COPY deploy/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+EXPOSE 8080
+ENTRYPOINT ["/entrypoint.sh"]
