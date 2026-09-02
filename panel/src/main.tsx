@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './auth';
 import { App } from './App';
+import { applyTheme, getTheme } from './theme';
 import './styles.css';
+
+applyTheme(getTheme()); // tema claro por defecto; el botón lo cambia
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

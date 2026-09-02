@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { ToastHost } from './Toast';
+import { getTheme, toggleTheme, type Theme } from '../theme';
 
 const links = [
   { to: '/', label: 'Resumen', end: true },
@@ -16,6 +18,8 @@ const links = [
 
 export function Layout() {
   const { admin, logout, canWrite } = useAuth();
+  const [theme, setThemeState] = useState<Theme>(getTheme());
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -31,7 +35,14 @@ export function Layout() {
       <div className="main">
         <div className="topbar">
           <div />
-          <div className="row">
+          <div className="row" style={{ alignItems: 'center' }}>
+            <button
+              className="theme-toggle"
+              title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              onClick={() => setThemeState(toggleTheme())}
+            >
+              {theme === 'dark' ? '☀ Claro' : '🌙 Oscuro'}
+            </button>
             <span className="muted">
               {admin?.email} · {admin?.role === 'admin' ? 'administrador' : 'solo lectura'}
             </span>
