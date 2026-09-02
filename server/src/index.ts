@@ -11,6 +11,7 @@ import { apiRoutes } from './routes/api.js';
 import { startRetentionJob } from './retention.js';
 import { screenshotRoot } from './storage.js';
 import { agentDownloadRoutes } from './routes/download.js';
+import { videoRoutes } from './routes/video.js';
 
 async function main() {
   await mkdir(screenshotRoot(), { recursive: true });
@@ -45,6 +46,7 @@ async function main() {
   await app.register(agentRoutes);
   await app.register(apiRoutes);
   await app.register(agentDownloadRoutes);
+  await app.register(videoRoutes);
 
   startRetentionJob();
 

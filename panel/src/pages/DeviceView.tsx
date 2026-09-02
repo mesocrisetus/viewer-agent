@@ -306,10 +306,52 @@ function Playback({
         value={idx}
         onChange={(e) => { setPlaying(false); setIdx(Number(e.target.value)); }}
       />
-      <div className="row" style={{ marginTop: 8 }}>
-        <button onClick={() => { setPlaying(false); setIdx((i) => Math.max(0, i - 1)); }}>◀ anterior</button>
-        <button onClick={() => { setPlaying(false); setIdx((i) => Math.min(times.length - 1, i + 1)); }}>siguiente ▶</button>
+      <div className="row between" style={{ marginTop: 8, alignItems: 'center' }}>
+        <div className="row">
+          <button onClick={() => { setPlaying(false); setIdx((i) => Math.max(0, i - 1)); }}>◀ anterior</button>
+          <button onClick={() => { setPlaying(false); setIdx((i) => Math.min(times.length - 1, i + 1)); }}>siguiente ▶</button>
+        </div>
+        <DownloadVideo deviceId={deviceId} fromISO={fromISO} toISO={toISO} monitors={shown} />
       </div>
+    </div>
+  );
+}
+
+function DownloadVideo({
+  deviceId, fromISO, toISO, monitors,
+}: { deviceId: string; fromISO: string; toISO: string; monitors: number[] }) {
+  const [speed, setSpeed] = useState(6); // fotogramas/seg del timelapse
+
+  function dl(monitor: number) {
+    const url = authedUrl(
+      `/api/devices/${deviceId}/video?from=${fromISO}&to=${toISO}&monitor=${monitor}&fps=${speed}`,
+    );
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast('Generando vídeo… puede tardar 1-2 min. La descarga empezará sola.');
+  }
+
+  return (
+    <div className="row" style={{ alignItems: 'center' }}>
+      <label style={{ margin: 0 }}>Velocidad</label>
+      <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))} title="fotogramas por segundo">
+        <option value={3}>Lenta</option>
+        <option value={6}>Normal</option>
+        <option value={12}>Rápida</option>
+        <option value={24}>Muy rápida</option>
+      </select>
+      {monitors.length <= 1 ? (
+        <button onClick={() => dl(monitors[0] ?? 0)}>⬇ Descargar vídeo</button>
+      ) : (
+        monitors.map((m) => (
+          <button key={m} onClick={() => dl(m)}>⬇ Vídeo P{m + 1}</button>
+        ))
+      )}
     </div>
   );
 }
