@@ -109,14 +109,18 @@ export function Downloads() {
           ) : <p className="muted">Necesitas rol de administrador para generar instaladores.</p>
         ) : (
           <div className="notice">
-            Todavía no hay ejecutable de Windows compilado. En un equipo Windows con Python:
+            No se encuentra <code>agent/dist/viewer-agent-windows.exe</code> en el servidor.
+            Normalmente viene incluido en el repositorio. Si falta, compílalo
+            <b> en un equipo Windows</b> (PyInstaller no compila para otro sistema),
+            con Python 3.10+:
             <pre style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>
 {`cd agent
 python -m venv .venv
 .venv\\Scripts\\python -m pip install pyinstaller -r requirements.txt
-.venv\\Scripts\\python build\\build.py
-# copia agent/dist/viewer-agent-windows.exe a la carpeta agent/dist/ del servidor`}
+.venv\\Scripts\\python build\\build.py`}
             </pre>
+            y copia el <code>agent/dist/viewer-agent-windows.exe</code> resultante a la
+            carpeta <code>agent/dist/</code> del servidor.
           </div>
         )}
         <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>

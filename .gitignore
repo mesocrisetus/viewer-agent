@@ -12,7 +12,12 @@ __pycache__/
 # PyInstaller: solo su carpeta de trabajo, NO agent/build/ (que tiene build.py e icon.ico)
 agent/build/*/
 agent/build/*.spec
-agent/dist/
+agent/dist/*
+# ...pero SÍ versionamos los ejecutables ya compilados (para que el servidor los
+# sirva sin necesitar un entorno de compilación):
+!agent/dist/viewer-agent-windows.exe
+!agent/dist/viewer-agent-linux
+!agent/dist/viewer-agent-macos
 
 # datos y secretos (NUNCA subir)
 deploy/.env
