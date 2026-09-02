@@ -72,7 +72,7 @@ except Exception:
 CONFIG_PATH = DATA_DIR / "config.json"
 STATE_PATH = DATA_DIR / "state.json"
 BUFFER_PATH = DATA_DIR / "buffer.sqlite3"
-LOG_PATH = DATA_DIR / "vigia-agent.log"
+LOG_PATH = DATA_DIR / "viewer-agent.log"
 
 # Config remota por defecto (hasta que el servidor manda la suya).
 DEFAULT_REMOTE = {
