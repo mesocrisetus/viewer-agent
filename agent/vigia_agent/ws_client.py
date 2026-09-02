@@ -11,13 +11,14 @@ from websocket import WebSocketApp
 
 class ControlChannel:
     def __init__(self, base_url: str, device_id: str, device_secret: str, verify_tls: bool,
-                 on_config, log):
+                 on_config, log, monitor_count: int = 1):
         self._url = base_url.rstrip("/").replace("http://", "ws://").replace("https://", "wss://") + "/agent/ws"
         self._device_id = device_id
         self._device_secret = device_secret
         self._verify = verify_tls
         self._on_config = on_config
         self._log = log
+        self._monitor_count = max(1, int(monitor_count))
 
         self._ws: WebSocketApp | None = None
         self._thread: threading.Thread | None = None
@@ -71,6 +72,7 @@ class ControlChannel:
             "type": "hello",
             "deviceId": self._device_id,
             "deviceSecret": self._device_secret,
+            "monitorCount": self._monitor_count,
         }))
         self._log("Canal de control conectado.")
 
@@ -110,8 +112,14 @@ class ControlChannel:
         except Exception:
             pass
 
+    def set_monitor_count(self, n: int) -> None:
+        self._monitor_count = max(1, int(n))
+
     def heartbeat(self, queued: int, cpu: float = 0.0, mem: float = 0.0) -> None:
-        self._safe_send({"type": "heartbeat", "queued": queued, "cpu": cpu, "mem": mem})
+        self._safe_send({
+            "type": "heartbeat", "queued": queued, "cpu": cpu, "mem": mem,
+            "monitorCount": self._monitor_count,
+        })
 
     @property
     def live_wanted(self) -> bool:
@@ -125,12 +133,13 @@ class ControlChannel:
     def live_quality(self) -> int:
         return self._live_quality
 
-    def send_frame(self, jpeg: bytes, ts: str) -> None:
+    def send_frame(self, jpeg: bytes, ts: str, monitor: int = 0) -> None:
         if not self._live.is_set():
             return
         self._safe_send({
             "type": "frame",
             "sessionId": self._live_session,
             "ts": ts,
+            "monitor": int(monitor),
             "jpegB64": base64.b64encode(jpeg).decode("ascii"),
         })

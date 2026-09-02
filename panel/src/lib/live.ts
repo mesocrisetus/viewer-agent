@@ -1,6 +1,6 @@
 import { getToken } from '../api';
 
-type FrameHandler = (deviceId: string, jpegB64: string, ts: string) => void;
+type FrameHandler = (deviceId: string, jpegB64: string, ts: string, monitor: number) => void;
 type StatusHandler = (deviceId: string, online: boolean) => void;
 
 /**
@@ -29,7 +29,7 @@ class LiveClient {
       let msg: any;
       try { msg = JSON.parse(ev.data); } catch { return; }
       if (msg.type === 'frame') {
-        for (const h of this.frameHandlers) h(msg.deviceId, msg.jpegB64, msg.ts);
+        for (const h of this.frameHandlers) h(msg.deviceId, msg.jpegB64, msg.ts, msg.monitor ?? 0);
       } else if (msg.type === 'status') {
         for (const h of this.statusHandlers) h(msg.deviceId, msg.online);
       }

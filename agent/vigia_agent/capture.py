@@ -7,6 +7,15 @@ import mss
 from PIL import Image
 
 
+def count_monitors() -> int:
+    """Nº de pantallas físicas. Barato y seguro (para el enrolamiento)."""
+    try:
+        with mss.mss() as s:
+            return max(1, len(s.monitors) - 1)
+    except Exception:
+        return 1
+
+
 class ScreenCapturer:
     def __init__(self) -> None:
         self._sct = mss.mss()

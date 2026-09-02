@@ -114,6 +114,7 @@ export async function apiRoutes(app: FastifyInstance) {
       osVersion: d.osVersion,
       username: d.username,
       agentVersion: d.agentVersion,
+      monitorCount: d.monitorCount,
       team: d.team ? { id: d.team.id, name: d.team.name } : null,
       enrolledAt: d.enrolledAt,
       lastSeenAt: d.lastSeenAt,

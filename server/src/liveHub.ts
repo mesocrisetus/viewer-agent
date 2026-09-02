@@ -68,13 +68,13 @@ function stopLive(deviceId: string) {
 }
 
 /** Llamado desde /agent/ws cuando llega un fotograma. */
-export function relayFrame(deviceId: string, ts: string, jpegB64: string) {
+export function relayFrame(deviceId: string, ts: string, jpegB64: string, monitor = 0) {
   const subs = subscribers.get(deviceId);
   if (!subs || subs.size === 0) {
     stopLive(deviceId);
     return;
   }
-  const payload = JSON.stringify({ type: 'frame', deviceId, ts, jpegB64 });
+  const payload = JSON.stringify({ type: 'frame', deviceId, ts, monitor, jpegB64 });
   for (const admin of subs) {
     try { admin.socket.send(payload); } catch {}
   }

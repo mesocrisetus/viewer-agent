@@ -35,15 +35,21 @@ export function DeviceView() {
   }, [id]);
   useEffect(() => { loadDevice(); const iv = setInterval(loadDevice, 15000); return () => clearInterval(iv); }, [loadDevice]);
 
-  // ---- live ----
-  const [frame, setFrame] = useState('');
+  // ---- live (multi-monitor) ----
+  const framesRef = useRef<Map<number, string>>(new Map());
+  const [, forceFrame] = useState(0);
   const [liveOnline, setLiveOnline] = useState(false);
+  const [liveView, setLiveView] = useState<'all' | number>('all');
   useEffect(() => {
     if (tab !== 'live') return;
     live.subscribe(id);
-    const offF = live.onFrame((d, b64) => { if (d === id) setFrame(`data:image/jpeg;base64,${b64}`); });
+    const offF = live.onFrame((d, b64, _ts, monitor) => {
+      if (d !== id) return;
+      framesRef.current.set(monitor, `data:image/jpeg;base64,${b64}`);
+      forceFrame((n) => n + 1);
+    });
     const offS = live.onStatus((d, online) => { if (d === id) setLiveOnline(online); });
-    return () => { live.unsubscribe(id); offF(); offS(); };
+    return () => { live.unsubscribe(id); offF(); offS(); framesRef.current.clear(); };
   }, [id, tab]);
 
   async function patch(body: Partial<Pick<Device, 'paused' | 'disabled'>>) {
@@ -107,19 +113,87 @@ export function DeviceView() {
       )}
 
       {tab === 'live' && (
-        <div className="card playback">
-          {frame ? <img src={frame} alt="pantalla en vivo" /> : (
-            <div style={{ padding: 40, textAlign: 'center' }} className="muted">
-              {liveOnline || device?.liveAvailable ? 'Conectando con el equipo…' : 'El agente no está conectado.'}
-            </div>
-          )}
-        </div>
+        <LiveView
+          monitorCount={device?.monitorCount ?? 1}
+          frames={framesRef.current}
+          view={liveView}
+          setView={setLiveView}
+          connecting={liveOnline || !!device?.liveAvailable}
+        />
       )}
 
-      {tab === 'playback' && <Playback deviceId={id} fromISO={new Date(from).toISOString()} toISO={new Date(to).toISOString()} />}
+      {tab === 'playback' && (
+        <Playback
+          deviceId={id}
+          monitorCount={device?.monitorCount ?? 1}
+          fromISO={new Date(from).toISOString()}
+          toISO={new Date(to).toISOString()}
+        />
+      )}
       {tab === 'activity' && <Activity deviceId={id} fromISO={new Date(from).toISOString()} toISO={new Date(to).toISOString()} canWrite={canWrite} />}
       {tab === 'keyboard' && <Keyboard deviceId={id} fromISO={new Date(from).toISOString()} toISO={new Date(to).toISOString()} />}
     </>
+  );
+}
+
+function MonitorPicker({
+  count, value, onChange,
+}: { count: number; value: 'all' | number; onChange: (v: 'all' | number) => void }) {
+  if (count <= 1) return null;
+  return (
+    <div className="row" style={{ marginBottom: 12 }}>
+      <button className={value === 'all' ? 'primary' : ''} onClick={() => onChange('all')}>
+        Todas ({count})
+      </button>
+      {Array.from({ length: count }, (_, i) => (
+        <button key={i} className={value === i ? 'primary' : ''} onClick={() => onChange(i)}>
+          Pantalla {i + 1}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LiveView({
+  monitorCount, frames, view, setView, connecting,
+}: {
+  monitorCount: number;
+  frames: Map<number, string>;
+  view: 'all' | number;
+  setView: (v: 'all' | number) => void;
+  connecting: boolean;
+}) {
+  const mons = Array.from({ length: Math.max(1, monitorCount) }, (_, i) => i);
+  const shown = view === 'all' ? mons : [view as number];
+  const anyFrame = frames.size > 0;
+
+  return (
+    <div className="card">
+      <MonitorPicker count={monitorCount} value={view} onChange={setView} />
+      {!anyFrame && (
+        <div style={{ padding: 40, textAlign: 'center' }} className="muted">
+          {connecting ? 'Conectando con el equipo…' : 'El agente no está conectado.'}
+        </div>
+      )}
+      {anyFrame && (
+        <div
+          style={{
+            display: 'grid', gap: 10,
+            gridTemplateColumns: shown.length > 1 ? 'repeat(auto-fit, minmax(340px, 1fr))' : '1fr',
+          }}
+        >
+          {shown.map((m) => (
+            <div key={m} className="live-tile" style={{ cursor: view === 'all' && monitorCount > 1 ? 'zoom-in' : 'default' }}
+              onClick={() => { if (view === 'all' && monitorCount > 1) setView(m); }}>
+              {frames.get(m)
+                ? <img src={frames.get(m)} alt={`Pantalla ${m + 1}`} style={{ aspectRatio: 'auto' }} />
+                : <div style={{ aspectRatio: '16/10', display: 'grid', placeItems: 'center', color: '#8a97a5' }}>Pantalla {m + 1} · esperando…</div>}
+              {monitorCount > 1 && <div className="cap"><span>Pantalla {m + 1}</span></div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -135,38 +209,90 @@ function QuickRanges({ onPick }: { onPick: (from: Date, to: Date) => void }) {
   );
 }
 
-function Playback({ deviceId, fromISO, toISO }: { deviceId: string; fromISO: string; toISO: string }) {
+function Playback({
+  deviceId, monitorCount, fromISO, toISO,
+}: { deviceId: string; monitorCount: number; fromISO: string; toISO: string }) {
   const [shots, setShots] = useState<Shot[]>([]);
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [view, setView] = useState<'all' | number>('all');
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
-    api.get<Shot[]>(`/api/devices/${deviceId}/screenshots?from=${fromISO}&to=${toISO}&limit=3000`)
-      .then((s) => { setShots(s); setIdx(0); })
+    api.get<Shot[]>(`/api/devices/${deviceId}/screenshots?from=${fromISO}&to=${toISO}&limit=5000`)
+      .then((s) => { setShots(s); setIdx(0); setPlaying(false); })
       .catch(() => setShots([]));
   }, [deviceId, fromISO, toISO]);
 
+  // Pantallas presentes en el rango + capturas por pantalla, ordenadas por hora.
+  const { byMon, monsPresent, times } = useMemo(() => {
+    const bm = new Map<number, Shot[]>();
+    for (const s of shots) {
+      const arr = bm.get(s.monitor) ?? [];
+      arr.push(s);
+      bm.set(s.monitor, arr);
+    }
+    for (const arr of bm.values()) arr.sort((a, b) => a.capturedAt.localeCompare(b.capturedAt));
+    const present = [...bm.keys()].sort((a, b) => a - b);
+    // Línea de tiempo unificada: la pantalla con más capturas hace de "eje".
+    let spine: Shot[] = [];
+    for (const arr of bm.values()) if (arr.length > spine.length) spine = arr;
+    return { byMon: bm, monsPresent: present, times: spine.map((s) => s.capturedAt) };
+  }, [shots]);
+
   useEffect(() => {
-    if (!playing) { if (timer.current) window.clearInterval(timer.current); return; }
+    if (!playing || times.length === 0) { if (timer.current) window.clearInterval(timer.current); return; }
     timer.current = window.setInterval(() => {
-      setIdx((i) => (i + 1 < shots.length ? i + 1 : (setPlaying(false), i)));
+      setIdx((i) => (i + 1 < times.length ? i + 1 : (setPlaying(false), i)));
     }, 700);
     return () => { if (timer.current) window.clearInterval(timer.current); };
-  }, [playing, shots.length]);
+  }, [playing, times.length]);
 
   if (shots.length === 0) return <div className="card">No hay capturas en este rango.</div>;
-  const cur = shots[Math.min(idx, shots.length - 1)];
+
+  const nMon = Math.max(monitorCount, monsPresent.length, 1);
+  const t = times[Math.min(idx, times.length - 1)];
+
+  // Captura de la pantalla m más cercana (≤ t); si no hay, la primera.
+  const shotAt = (m: number): Shot | null => {
+    const arr = byMon.get(m);
+    if (!arr || arr.length === 0) return null;
+    let pick = arr[0];
+    for (const s of arr) { if (s.capturedAt <= t) pick = s; else break; }
+    return pick;
+  };
+
+  const shown = view === 'all' ? monsPresent : [view as number];
 
   return (
     <div className="card">
-      <div className="playback">
-        <img src={authedUrl(`/api/screenshots/${cur.id}/full`)} alt={cur.capturedAt} />
+      {nMon > 1 && <MonitorPicker count={nMon} value={view} onChange={setView} />}
+
+      <div
+        style={{
+          display: 'grid', gap: 10,
+          gridTemplateColumns: shown.length > 1 ? 'repeat(auto-fit, minmax(340px, 1fr))' : '1fr',
+        }}
+      >
+        {shown.map((m) => {
+          const s = shotAt(m);
+          return (
+            <div key={m} className="live-tile" style={{ cursor: view === 'all' && nMon > 1 ? 'zoom-in' : 'default' }}
+              onClick={() => { if (view === 'all' && nMon > 1) setView(m); }}>
+              {s
+                ? <img src={authedUrl(`/api/screenshots/${s.id}/full`)} alt={s.capturedAt} style={{ aspectRatio: 'auto' }} />
+                : <div style={{ aspectRatio: '16/10', display: 'grid', placeItems: 'center', color: '#8a97a5' }}>Pantalla {m + 1} · sin capturas</div>}
+              {nMon > 1 && <div className="cap"><span>Pantalla {m + 1}</span>{s && <span className="muted">{fmtTime(s.capturedAt)}</span>}</div>}
+            </div>
+          );
+        })}
       </div>
+
       <div className="row between" style={{ marginTop: 10 }}>
         <button onClick={() => setPlaying((p) => !p)} className="primary">{playing ? '⏸ Pausa' : '▶ Reproducir'}</button>
         <span className="muted">
-          {idx + 1} / {shots.length} · {fmtDateTime(cur.capturedAt)} · monitor {cur.monitor}
+          {idx + 1} / {times.length} · {fmtDateTime(t)}
+          {shots.length >= 5000 && ' · muestra parcial, acota el rango'}
         </span>
       </div>
       <input
@@ -174,13 +300,13 @@ function Playback({ deviceId, fromISO, toISO }: { deviceId: string; fromISO: str
         style={{ marginTop: 10 }}
         type="range"
         min={0}
-        max={shots.length - 1}
+        max={Math.max(0, times.length - 1)}
         value={idx}
         onChange={(e) => { setPlaying(false); setIdx(Number(e.target.value)); }}
       />
       <div className="row" style={{ marginTop: 8 }}>
-        <button onClick={() => setIdx((i) => Math.max(0, i - 1))}>◀ anterior</button>
-        <button onClick={() => setIdx((i) => Math.min(shots.length - 1, i + 1))}>siguiente ▶</button>
+        <button onClick={() => { setPlaying(false); setIdx((i) => Math.max(0, i - 1)); }}>◀ anterior</button>
+        <button onClick={() => { setPlaying(false); setIdx((i) => Math.min(times.length - 1, i + 1)); }}>siguiente ▶</button>
       </div>
     </div>
   );

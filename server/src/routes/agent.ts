@@ -20,6 +20,7 @@ const enrollBody = z.object({
   osVersion: z.string().max(120).default(''),
   username: z.string().max(120).default(''),
   agentVersion: z.string().max(40).default(''),
+  monitorCount: z.number().int().min(1).max(16).default(1),
 });
 
 const activityBody = z.object({
@@ -83,6 +84,7 @@ export async function agentRoutes(app: FastifyInstance) {
         osVersion: body.osVersion,
         username: body.username,
         agentVersion: body.agentVersion,
+        monitorCount: body.monitorCount,
         teamId: token.teamId,
         lastSeenAt: new Date(),
       },
@@ -254,7 +256,11 @@ export async function agentRoutes(app: FastifyInstance) {
         helloDone = true;
         registerAgent(deviceId, socket);
         notifyAgentConnected(deviceId);
-        await prisma.device.update({ where: { id: deviceId }, data: { lastSeenAt: new Date() } });
+        const mc = Number.isInteger(msg.monitorCount) ? Math.min(16, Math.max(1, msg.monitorCount)) : device.monitorCount;
+        await prisma.device.update({
+          where: { id: deviceId },
+          data: { lastSeenAt: new Date(), monitorCount: mc },
+        });
         socket.send(JSON.stringify({ type: 'config', config: await buildConfig(device) }));
         return;
       }
@@ -263,15 +269,17 @@ export async function agentRoutes(app: FastifyInstance) {
 
       switch (msg.type) {
         case 'heartbeat': {
-          await prisma.device.update({
-            where: { id: deviceId },
-            data: { lastSeenAt: new Date() },
-          });
+          const data: { lastSeenAt: Date; monitorCount?: number } = { lastSeenAt: new Date() };
+          if (Number.isInteger(msg.monitorCount)) {
+            data.monitorCount = Math.min(16, Math.max(1, msg.monitorCount));
+          }
+          await prisma.device.update({ where: { id: deviceId }, data });
           break;
         }
         case 'frame': {
           if (typeof msg.jpegB64 === 'string') {
-            relayFrame(deviceId, msg.ts ?? new Date().toISOString(), msg.jpegB64);
+            const monitor = Number.isInteger(msg.monitor) ? msg.monitor : 0;
+            relayFrame(deviceId, msg.ts ?? new Date().toISOString(), msg.jpegB64, monitor);
           }
           break;
         }

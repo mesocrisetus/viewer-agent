@@ -19,7 +19,8 @@ export function LiveGrid() {
 
   useEffect(() => {
     liveIds.forEach((id) => live.subscribe(id));
-    const off = live.onFrame((deviceId, jpegB64) => {
+    const off = live.onFrame((deviceId, jpegB64, _ts, monitor) => {
+      if (monitor !== 0) return; // en la rejilla se muestra solo la pantalla principal
       frames.current.set(deviceId, `data:image/jpeg;base64,${jpegB64}`);
       force((n) => n + 1);
     });
@@ -51,7 +52,10 @@ export function LiveGrid() {
                 </div>
               )}
               <div className="cap">
-                <span>{d.hostname} · {d.username || 's/ usuario'}</span>
+                <span>
+                  {d.hostname} · {d.username || 's/ usuario'}
+                  {d.monitorCount > 1 && <span className="badge" style={{ marginLeft: 6 }}>🖵 {d.monitorCount}</span>}
+                </span>
                 <span className="muted">{agoLabel(d.lastSeenAt)}</span>
               </div>
             </Link>

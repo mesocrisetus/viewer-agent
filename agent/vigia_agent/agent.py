@@ -12,7 +12,7 @@ import time
 from . import AGENT_VERSION
 from .api import Api, ApiError
 from .buffer import Buffer
-from .capture import ScreenCapturer
+from .capture import ScreenCapturer, count_monitors
 from .config import BUFFER_PATH, DATA_DIR, LOG_PATH, LocalConfig, State
 from .input_monitor import InputMonitor
 from .platform_window import get_active_window
@@ -123,6 +123,7 @@ class Agent:
             "osVersion": platform.version(),
             "username": _current_user(),
             "agentVersion": AGENT_VERSION,
+            "monitorCount": count_monitors(),
         }
         self.log("Dando de alta el equipo...")
         # Reintenta ante fallos de red; NO reintenta si el token es inválido.
@@ -265,9 +266,18 @@ class Agent:
         while not self._stop.is_set():
             try:
                 if self.ctrl and self.ctrl.live_wanted and not self.remote.get("paused"):
+                    n = max(1, cap.monitors())
+                    # Con muchas pantallas, baja fps y resolución para no saturar.
                     fps = max(1, min(self.ctrl.live_fps, 10))
-                    jpeg = cap.grab_jpeg(0, 1280, self.ctrl.live_quality)
-                    self.ctrl.send_frame(jpeg, _now_iso())
+                    edge = 1280
+                    if n >= 3:
+                        fps = max(1, fps // 2)
+                        edge = 1024
+                    for m in range(n):
+                        if not self.ctrl.live_wanted or self._stop.is_set():
+                            break
+                        jpeg = cap.grab_jpeg(m, edge, self.ctrl.live_quality)
+                        self.ctrl.send_frame(jpeg, _now_iso(), monitor=m)
                     self._stop.wait(1.0 / fps)
                 else:
                     self._stop.wait(0.5)
@@ -350,6 +360,7 @@ class Agent:
         self.ctrl = ControlChannel(
             self.cfg.base_url, self.state.device_id, self.state.device_secret,
             self.cfg.verify_tls, on_config=self._apply_remote, log=self.log,
+            monitor_count=count_monitors(),
         )
         self.ctrl.start()
 

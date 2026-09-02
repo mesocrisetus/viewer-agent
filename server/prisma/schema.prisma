@@ -53,6 +53,7 @@ model Device {
   consentAcceptedAt DateTime?
   disabled          Boolean  @default(false)
   paused            Boolean  @default(false)
+  monitorCount      Int      @default(1)
 
   screenshots   Screenshot[]
   activity      ActivitySample[]

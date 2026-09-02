@@ -63,6 +63,7 @@ export interface Device {
   osVersion: string;
   username: string;
   agentVersion: string;
+  monitorCount: number;
   team: { id: string; name: string } | null;
   enrolledAt: string;
   lastSeenAt: string | null;
