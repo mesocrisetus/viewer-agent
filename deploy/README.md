@@ -29,9 +29,20 @@ Esto levanta tres servicios:
 | `server` | API + relay de vídeo + retención. Aplica migraciones y crea el admin inicial al arrancar |
 | `nginx`  | Sirve el panel compilado y hace de proxy inverso (`/api`, `/agent`, `/ws`, `/download`) |
 
-El panel queda en `http://TU_DOMINIO/`. Entra con el correo y la contraseña de
-`SEED_ADMIN_*` y **cámbiala** (Ajustes → Administradores desde otra cuenta, o
-crea una nueva y borra la de arranque).
+### Puerto de acceso
+
+Nginx publica en el puerto **`HTTP_PORT`** de `.env` (por defecto **`8471`**, poco
+común para no chocar con Apache/nginx/IIS que ya usen el 80). Todo — panel,
+API y agentes — pasa por ese único puerto.
+
+- **Ábrelo en el firewall del servidor** (entrante, TCP). Con `ufw`:
+  `sudo ufw allow 8471/tcp`  (`autoinstall.sh` lo hace solo si `ufw` está activo).
+- Si hay router/NAT delante, **redirige** ese puerto a la máquina.
+- `PANEL_ORIGIN` debe incluir el puerto: `http://tu-dominio-o-ip:8471`.
+
+El panel queda en `http://TU_DOMINIO:8471/`. Entra con el correo y la contraseña
+de `SEED_ADMIN_*` y **cámbiala** (Usuarios del panel → crea otra cuenta y borra
+la de arranque, o cambia su contraseña).
 
 ## Almacenamiento de grabaciones
 
@@ -65,7 +76,8 @@ fuera:
 1. **Usa un dominio público** (p. ej. `vigia.tuempresa.com`) que resuelva a la
    IP pública del servidor, y ábrelo también desde la red interna (si tu router
    no hace *hairpin NAT*, añade una entrada de DNS interno con la IP local).
-2. **Abre los puertos** 80 y 443 del servidor hacia Internet. El WebSocket de
+2. **Abre el puerto** `HTTP_PORT` (por defecto 8471) del servidor hacia Internet
+   —y el 443 si pones HTTPS delante—. El WebSocket de
    control y de vídeo va por el mismo 443 (`/agent/`), no hace falta abrir nada
    más.
 3. **HTTPS obligatorio de facto**: el agente envía capturas de pantalla; no lo
