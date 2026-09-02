@@ -349,7 +349,7 @@ function DownloadVideo({
         <button onClick={() => dl(monitors[0] ?? 0)}>⬇ Descargar vídeo</button>
       ) : (
         monitors.map((m) => (
-          <button key={m} onClick={() => dl(m)}>⬇ Vídeo P{m + 1}</button>
+          <button key={m} onClick={() => dl(m)}>⬇ Vídeo · Pantalla {m + 1}</button>
         ))
       )}
     </div>
