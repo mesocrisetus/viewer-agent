@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { ToastHost } from './Toast';
 import { getTheme, toggleTheme, type Theme } from '../theme';
@@ -19,10 +19,17 @@ const links = [
 export function Layout() {
   const { admin, logout, canWrite } = useAuth();
   const [theme, setThemeState] = useState<Theme>(getTheme());
+  const [menuOpen, setMenuOpen] = useState(false);
+  const loc = useLocation();
+
+  // Cierra el menú lateral al navegar (en móvil).
+  useEffect(() => { setMenuOpen(false); }, [loc.pathname]);
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
+
+      <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="brand">◎ VIEWER</div>
         <nav className="nav">
           {links.filter((l) => !l.admin || canWrite).map((l) => (
@@ -32,18 +39,21 @@ export function Layout() {
           ))}
         </nav>
       </aside>
+
       <div className="main">
         <div className="topbar">
-          <div />
-          <div className="row" style={{ alignItems: 'center' }}>
+          <button className="hamburger" aria-label="Menú" onClick={() => setMenuOpen((v) => !v)}>☰</button>
+          <span className="brand-sm">◎ VIEWER</span>
+          <div className="topbar-actions">
             <button
               className="theme-toggle"
               title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
               onClick={() => setThemeState(toggleTheme())}
             >
-              {theme === 'dark' ? '☀ Claro' : '🌙 Oscuro'}
+              {theme === 'dark' ? '☀' : '🌙'}
+              <span className="hide-sm">{theme === 'dark' ? ' Claro' : ' Oscuro'}</span>
             </button>
-            <span className="muted">
+            <span className="muted hide-sm">
               {admin?.email} · {admin?.role === 'admin' ? 'administrador' : 'solo lectura'}
             </span>
             <button onClick={logout}>Salir</button>

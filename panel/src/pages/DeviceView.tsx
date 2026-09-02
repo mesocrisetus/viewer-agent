@@ -178,12 +178,7 @@ function LiveView({
         </div>
       )}
       {anyFrame && (
-        <div
-          style={{
-            display: 'grid', gap: 10,
-            gridTemplateColumns: shown.length > 1 ? 'repeat(auto-fit, minmax(340px, 1fr))' : '1fr',
-          }}
-        >
+        <div className={shown.length > 1 ? 'mon-grid' : ''}>
           {shown.map((m) => (
             <div key={m} className="live-tile" style={{ cursor: view === 'all' && monitorCount > 1 ? 'zoom-in' : 'default' }}
               onClick={() => { if (view === 'all' && monitorCount > 1) setView(m); }}>
@@ -270,12 +265,7 @@ function Playback({
     <div className="card">
       {nMon > 1 && <MonitorPicker count={nMon} value={view} onChange={setView} />}
 
-      <div
-        style={{
-          display: 'grid', gap: 10,
-          gridTemplateColumns: shown.length > 1 ? 'repeat(auto-fit, minmax(340px, 1fr))' : '1fr',
-        }}
-      >
+      <div className={shown.length > 1 ? 'mon-grid' : ''}>
         {shown.map((m) => {
           const s = shotAt(m);
           return (
