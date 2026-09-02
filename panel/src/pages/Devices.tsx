@@ -153,7 +153,7 @@ export function Devices() {
       <div className="card">
         <table>
           <thead>
-            <tr><th>Equipo</th><th>Usuario</th><th>SO</th><th>Grupo</th><th>Estado</th><th>Consent.</th><th>Visto</th><th></th></tr>
+            <tr><th>Equipo</th><th>Usuario</th><th>SO</th><th>Pant.</th><th>Agente</th><th>Grupo</th><th>Estado</th><th>Consent.</th><th>Visto</th><th></th></tr>
           </thead>
           <tbody>
             {devices.map((d) => (
@@ -161,6 +161,8 @@ export function Devices() {
                 <td><Link to={`/devices/${d.id}`}>{d.hostname}</Link>{d.disabled && <span className="badge" style={{ marginLeft: 6 }}>deshab.</span>}</td>
                 <td>{d.username || '—'}</td>
                 <td>{d.os}</td>
+                <td>{d.monitorCount > 1 ? `🖵 ${d.monitorCount}` : d.monitorCount}</td>
+                <td className="muted">{d.agentVersion || '?'}</td>
                 <td>
                   {canWrite ? (
                     <select value={d.team?.id ?? ''} onChange={(e) => assignTeam(d, e.target.value)}>
@@ -179,7 +181,7 @@ export function Devices() {
                 </td>
               </tr>
             ))}
-            {devices.length === 0 && <tr><td colSpan={8} className="muted">Ningún equipo dado de alta.</td></tr>}
+            {devices.length === 0 && <tr><td colSpan={10} className="muted">Ningún equipo dado de alta.</td></tr>}
           </tbody>
         </table>
       </div>

@@ -287,6 +287,7 @@ class Agent:
 
     def _uploader_loop(self) -> None:
         auth_fails = 0
+        hb = 0
         while not self._stop.is_set():
             sent_any = False
             try:
@@ -307,6 +308,12 @@ class Agent:
                 else:
                     self.log(f"uploader: {e}")
             if self.ctrl:
+                hb += 1
+                if hb % 6 == 1:  # revisa el nº de pantallas ~cada minuto
+                    try:
+                        self.ctrl.set_monitor_count(count_monitors())
+                    except Exception:
+                        pass
                 self.ctrl.heartbeat(self.buffer.count(), *_sysload())
             # backoff progresivo si el servidor rechaza las credenciales
             wait = 1 if sent_any else 5

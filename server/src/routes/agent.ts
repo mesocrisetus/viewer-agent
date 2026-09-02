@@ -234,6 +234,7 @@ export async function agentRoutes(app: FastifyInstance) {
   app.get('/agent/ws', { websocket: true }, (socket) => {
     let deviceId: string | null = null;
     let helloDone = false;
+    let knownMonitors = 1;
 
     const closeWith = (code: number, reason: string) => {
       try { socket.close(code, reason); } catch {}
@@ -257,6 +258,7 @@ export async function agentRoutes(app: FastifyInstance) {
         registerAgent(deviceId, socket);
         notifyAgentConnected(deviceId);
         const mc = Number.isInteger(msg.monitorCount) ? Math.min(16, Math.max(1, msg.monitorCount)) : device.monitorCount;
+        knownMonitors = mc;
         await prisma.device.update({
           where: { id: deviceId },
           data: { lastSeenAt: new Date(), monitorCount: mc },
@@ -271,7 +273,8 @@ export async function agentRoutes(app: FastifyInstance) {
         case 'heartbeat': {
           const data: { lastSeenAt: Date; monitorCount?: number } = { lastSeenAt: new Date() };
           if (Number.isInteger(msg.monitorCount)) {
-            data.monitorCount = Math.min(16, Math.max(1, msg.monitorCount));
+            const n = Math.min(16, Math.max(1, msg.monitorCount));
+            if (n !== knownMonitors) { data.monitorCount = n; knownMonitors = n; }
           }
           await prisma.device.update({ where: { id: deviceId }, data });
           break;
@@ -279,6 +282,14 @@ export async function agentRoutes(app: FastifyInstance) {
         case 'frame': {
           if (typeof msg.jpegB64 === 'string') {
             const monitor = Number.isInteger(msg.monitor) ? msg.monitor : 0;
+            // Autocorrección: si llega un fotograma de una pantalla que el
+            // registro no conocía, sube monitorCount.
+            if (monitor + 1 > knownMonitors && monitor + 1 <= 16) {
+              knownMonitors = monitor + 1;
+              prisma.device
+                .update({ where: { id: deviceId }, data: { monitorCount: knownMonitors } })
+                .catch(() => {});
+            }
             relayFrame(deviceId, msg.ts ?? new Date().toISOString(), msg.jpegB64, monitor);
           }
           break;

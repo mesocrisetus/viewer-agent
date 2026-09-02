@@ -40,16 +40,18 @@ export function DeviceView() {
   const [, forceFrame] = useState(0);
   const [liveOnline, setLiveOnline] = useState(false);
   const [liveView, setLiveView] = useState<'all' | number>('all');
+  const [seenMonitors, setSeenMonitors] = useState(0); // nº de pantallas que han enviado fotograma
   useEffect(() => {
     if (tab !== 'live') return;
     live.subscribe(id);
     const offF = live.onFrame((d, b64, _ts, monitor) => {
       if (d !== id) return;
       framesRef.current.set(monitor, `data:image/jpeg;base64,${b64}`);
+      setSeenMonitors((n) => Math.max(n, monitor + 1));
       forceFrame((n) => n + 1);
     });
     const offS = live.onStatus((d, online) => { if (d === id) setLiveOnline(online); });
-    return () => { live.unsubscribe(id); offF(); offS(); framesRef.current.clear(); };
+    return () => { live.unsubscribe(id); offF(); offS(); framesRef.current.clear(); setSeenMonitors(0); };
   }, [id, tab]);
 
   async function patch(body: Partial<Pick<Device, 'paused' | 'disabled'>>) {
@@ -114,7 +116,7 @@ export function DeviceView() {
 
       {tab === 'live' && (
         <LiveView
-          monitorCount={device?.monitorCount ?? 1}
+          monitorCount={Math.max(device?.monitorCount ?? 1, seenMonitors)}
           frames={framesRef.current}
           view={liveView}
           setView={setLiveView}
