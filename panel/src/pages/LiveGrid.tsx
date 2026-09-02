@@ -53,7 +53,7 @@ export function LiveGrid() {
               )}
               <div className="cap">
                 <span>
-                  {d.hostname} · {d.username || 's/ usuario'}
+                  {d.label || d.hostname}{d.label ? '' : ` · ${d.username || 's/ usuario'}`}
                   {d.monitorCount > 1 && <span className="badge" style={{ marginLeft: 6 }}>🖵 {d.monitorCount}</span>}
                 </span>
                 <span className="muted">{agoLabel(d.lastSeenAt)}</span>

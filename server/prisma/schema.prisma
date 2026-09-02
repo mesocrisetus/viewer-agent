@@ -45,6 +45,7 @@ model Device {
   os                String   // windows | linux | macos
   osVersion         String   @default("")
   username          String   @default("")
+  label             String   @default("") // nombre puesto por el admin (persona/puesto)
   agentVersion      String   @default("")
   team              Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
   teamId            String?

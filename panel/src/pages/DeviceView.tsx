@@ -54,7 +54,7 @@ export function DeviceView() {
     return () => { live.unsubscribe(id); offF(); offS(); framesRef.current.clear(); setSeenMonitors(0); };
   }, [id, tab]);
 
-  async function patch(body: Partial<Pick<Device, 'paused' | 'disabled'>>) {
+  async function patch(body: Partial<Pick<Device, 'paused' | 'disabled' | 'label'>>) {
     try {
       await api.patch(`/api/devices/${id}`, body);
       toast('Guardado.');
@@ -65,7 +65,10 @@ export function DeviceView() {
   return (
     <>
       <div className="row between">
-        <h1>{device?.hostname ?? 'Equipo'} <span className="muted" style={{ fontSize: 14 }}>{device?.username}</span></h1>
+        <h1>
+          {device?.label || device?.hostname || 'Equipo'}
+          {device?.label && <span className="muted" style={{ fontSize: 14 }}> · {device.hostname}</span>}
+        </h1>
         {device && (
           <div className="row">
             <span className={`badge ${device.status}`}>{device.status}</span>
@@ -83,8 +86,23 @@ export function DeviceView() {
         )}
       </div>
 
+      {device && canWrite && (
+        <div className="row" style={{ margin: '6px 0 2px', alignItems: 'center' }}>
+          <label style={{ margin: 0 }}>Nombre / responsable</label>
+          <input
+            defaultValue={device.label}
+            placeholder="p. ej. Juan Pérez"
+            style={{ width: 220 }}
+            key={device.label}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            onBlur={(e) => { if (e.target.value.trim() !== device.label) patch({ label: e.target.value.trim() }); }}
+          />
+        </div>
+      )}
+
       {device && (
         <p className="muted">
+          {device.username && <>usuario del equipo: {device.username} · </>}
           {device.os} {device.osVersion} · agente {device.agentVersion || '?'} ·
           alta {fmtDateTime(device.enrolledAt)} ·
           consentimiento {device.consentAcceptedAt ? fmtDateTime(device.consentAcceptedAt) : 'PENDIENTE'} ·

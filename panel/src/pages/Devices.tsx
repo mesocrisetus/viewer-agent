@@ -48,6 +48,10 @@ export function Devices() {
     try { await api.patch(`/api/devices/${d.id}`, { teamId: teamId || null }); load(); }
     catch { toast('No se pudo asignar.', true); }
   }
+  async function saveLabel(d: Device, label: string) {
+    try { await api.patch(`/api/devices/${d.id}`, { label: label.trim() }); toast('Nombre guardado.'); load(); }
+    catch { toast('No se pudo guardar el nombre.', true); }
+  }
   async function purgeData(d: Device) {
     if (!confirm(`Borrar TODOS los datos (capturas, actividad, teclado, alertas) de ${d.hostname}? El equipo sigue registrado. No se puede deshacer.`)) return;
     try { await api.del(`/api/devices/${d.id}/data`); toast('Datos borrados.'); load(); }
@@ -153,12 +157,26 @@ export function Devices() {
       <div className="card">
         <table>
           <thead>
-            <tr><th>Equipo</th><th>Usuario</th><th>SO</th><th>Pant.</th><th>Agente</th><th>Grupo</th><th>Estado</th><th>Consent.</th><th>Visto</th><th></th></tr>
+            <tr><th>Nombre / responsable</th><th>Equipo</th><th>Usuario SO</th><th>SO</th><th>Pant.</th><th>Agente</th><th>Grupo</th><th>Estado</th><th>Consent.</th><th>Visto</th><th></th></tr>
           </thead>
           <tbody>
             {devices.map((d) => (
               <tr key={d.id}>
-                <td><Link to={`/devices/${d.id}`}>{d.hostname}</Link>{d.disabled && <span className="badge" style={{ marginLeft: 6 }}>deshab.</span>}</td>
+                <td>
+                  {canWrite ? (
+                    <input
+                      defaultValue={d.label}
+                      placeholder="p. ej. Juan Pérez"
+                      style={{ width: 180 }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                      onBlur={(e) => { if (e.target.value.trim() !== d.label) saveLabel(d, e.target.value); }}
+                    />
+                  ) : (d.label || '—')}
+                </td>
+                <td>
+                  <Link to={`/devices/${d.id}`}>{d.hostname}</Link>
+                  {d.disabled && <span className="badge" style={{ marginLeft: 6 }}>deshab.</span>}
+                </td>
                 <td>{d.username || '—'}</td>
                 <td>{d.os}</td>
                 <td>{d.monitorCount > 1 ? `🖵 ${d.monitorCount}` : d.monitorCount}</td>
@@ -181,7 +199,7 @@ export function Devices() {
                 </td>
               </tr>
             ))}
-            {devices.length === 0 && <tr><td colSpan={10} className="muted">Ningún equipo dado de alta.</td></tr>}
+            {devices.length === 0 && <tr><td colSpan={11} className="muted">Ningún equipo dado de alta.</td></tr>}
           </tbody>
         </table>
       </div>

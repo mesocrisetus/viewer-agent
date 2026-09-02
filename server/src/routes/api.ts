@@ -113,6 +113,7 @@ export async function apiRoutes(app: FastifyInstance) {
       os: d.os,
       osVersion: d.osVersion,
       username: d.username,
+      label: d.label,
       agentVersion: d.agentVersion,
       monitorCount: d.monitorCount,
       team: d.team ? { id: d.team.id, name: d.team.name } : null,
@@ -147,6 +148,7 @@ export async function apiRoutes(app: FastifyInstance) {
         disabled: z.boolean().optional(),
         paused: z.boolean().optional(),
         username: z.string().max(120).optional(),
+        label: z.string().max(120).optional(),
       })
       .parse(req.body);
     const d = await prisma.device.update({ where: { id }, data: body }).catch(() => null);
@@ -311,7 +313,7 @@ export async function apiRoutes(app: FastifyInstance) {
       let b = buckets.get(key);
       if (!b) {
         b = {
-          device: d?.hostname ?? r.deviceId,
+          device: d?.label || d?.hostname || r.deviceId,
           user: d?.username ?? '',
           team: d?.team?.name ?? '',
           day,
