@@ -50,7 +50,10 @@ services:
     environment:
       PANEL_SERVER_NAME: ${PANEL_SERVER_NAME}
     ports:
-      - "80:80"
+      # Puerto de acceso al panel y a los agentes. Poco común a propósito para no
+      # chocar con nada. Cámbialo en deploy/.env con HTTP_PORT. Ábrelo en el
+      # firewall (TCP entrante).
+      - "${HTTP_PORT:-8471}:80"
     # Para HTTPS: monta aquí tus certificados y añade el bloque 443 en nginx.conf,
     # o pon este servicio detrás de un proxy TLS (Caddy, Traefik, el de tu balanceador).
     # volumes:

@@ -61,16 +61,24 @@ fi
 
 if [ "${SKIP_ENV:-0}" -ne 1 ]; then
   if [ "$YES" -eq 0 ]; then
-    read -rp "  Dirección pública del panel (ej. https://vigilancia.miempresa.com o http://IP): " PUBLIC_URL
+    read -rp "  Puerto de acceso (Enter = 8471, poco común): " HTTP_PORT
+    read -rp "  Dirección pública SIN puerto (ej. https://vigilancia.miempresa.com o http://90.1.2.3): " PUBLIC_HOST
     read -rp "  Correo del administrador inicial: " ADMIN_EMAIL
     read -rsp "  Contraseña del administrador inicial: " ADMIN_PASS; echo
   fi
-  PUBLIC_URL="${PUBLIC_URL:-http://localhost}"
+  HTTP_PORT="${HTTP_PORT:-8471}"
+  PUBLIC_HOST="${PUBLIC_HOST:-http://localhost}"
+  PUBLIC_HOST="${PUBLIC_HOST%/}"
+  # La URL pública incluye el puerto salvo que sea 80/443.
+  case "$HTTP_PORT" in
+    80|443) PUBLIC_URL="$PUBLIC_HOST" ;;
+    *)      PUBLIC_URL="$PUBLIC_HOST:$HTTP_PORT" ;;
+  esac
   ADMIN_EMAIL="${ADMIN_EMAIL:-admin@viewer.local}"
   ADMIN_PASS="${ADMIN_PASS:-$(rand 8)}"
   DB_PASS="$(rand 24)"
   JWT="$(rand 32)"
-  SERVER_NAME="$(printf '%s' "$PUBLIC_URL" | sed -E 's#^https?://##; s#/.*$##')"
+  SERVER_NAME="$(printf '%s' "$PUBLIC_HOST" | sed -E 's#^https?://##; s#/.*$##')"
 
   cat > .env <<EOF
 # Generado por autoinstall.sh el $(date -Is)
@@ -90,10 +98,11 @@ MAX_UPLOAD_MB=8
 SEED_ADMIN_EMAIL=$ADMIN_EMAIL
 SEED_ADMIN_PASSWORD=$ADMIN_PASS
 
+HTTP_PORT=$HTTP_PORT
 PANEL_SERVER_NAME=$SERVER_NAME
 EOF
   chmod 600 .env
-  ok ".env creado (PANEL_ORIGIN=$PUBLIC_URL)"
+  ok ".env creado (panel en $PUBLIC_URL, puerto $HTTP_PORT)"
 fi
 
 # --------------------------------------------------------------------------- #
@@ -102,13 +111,18 @@ docker compose up -d --build
 ok "Contenedores arrancados"
 
 # --------------------------------------------------------------------------- #
-say "4/5 · Esperar a que el servidor responda"
-URL_LOCAL="http://localhost:${HTTP_PORT:-80}/health"
+PORT="$(grep -E '^HTTP_PORT=' .env | cut -d= -f2-)"; PORT="${PORT:-8471}"
+say "4/5 · Esperar a que el servidor responda (puerto $PORT)"
 for i in $(seq 1 60); do
-  if curl -fsS "$URL_LOCAL" >/dev/null 2>&1; then ok "Servidor sano"; HEALTHY=1; break; fi
+  if curl -fsS "http://localhost:$PORT/health" >/dev/null 2>&1; then ok "Servidor sano"; HEALTHY=1; break; fi
   sleep 2
 done
 [ "${HEALTHY:-0}" -eq 1 ] || warn "El servidor aún no responde; revisa 'docker compose logs -f server'."
+
+# Abre el puerto en el firewall del propio servidor (ufw, si está activo).
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+  ufw allow "${PORT}/tcp" >/dev/null 2>&1 && ok "ufw: puerto ${PORT}/tcp abierto"
+fi
 
 # --------------------------------------------------------------------------- #
 say "5/5 · Listo"
@@ -120,9 +134,12 @@ cat <<EOF
    Panel:     $PANEL_ORIGIN
    Usuario:   $ADMIN_EMAIL
    Contraseña: (la que introdujiste / está en deploy/.env)
+   Puerto:    $PORT/TCP  ->  ÁBRELO en el firewall (entrante)
   ────────────────────────────────────────────────────────────
 
   Siguientes pasos:
+   · Firewall: abre el puerto $PORT/TCP entrante en el servidor y, si hay
+     router/NAT, redirige ese puerto a esta máquina.
    · Abre el panel y cambia la contraseña del administrador.
    · Ajustes → «Dirección pública del servidor»: confírmala si tus
      equipos se conectan desde fuera de la empresa.
