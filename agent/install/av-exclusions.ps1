@@ -80,14 +80,16 @@ if ($Remove) { return }
 # Este script detecta Kaspersky, deja los datos listos para copiar y abre la
 # ventana de ajustes si puede.
 
-$kasp = Get-CimInstance Win32_Product -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -like '*Kaspersky*' } | Select-Object -First 1
+# Detección por registro (rápida; Win32_Product es lento y puede disparar reparaciones)
+$kasp = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -like '*Kaspersky*' } | Select-Object -First 1
 $avpUi = Get-ChildItem 'C:\Program Files (x86)\Kaspersky Lab','C:\Program Files\Kaspersky Lab' -Recurse -Filter 'avpui.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
 
 if ($kasp -or $avpUi) {
   Write-Host ''
   Write-Host '=== KASPERSKY detectado ===' -ForegroundColor Cyan
-  if ($kasp) { Write-Host ("  Producto: {0} {1}" -f $kasp.Name, $kasp.Version) }
+  if ($kasp) { Write-Host ("  Producto: {0} {1}" -f $kasp.DisplayName, $kasp.DisplayVersion) }
   Write-Host '  Kaspersky no admite exclusiones por comando. Añade estos elementos'
   Write-Host '  a la Zona de confianza (por directiva de KSC o en el equipo):' -ForegroundColor Yellow
   Write-Host ''
