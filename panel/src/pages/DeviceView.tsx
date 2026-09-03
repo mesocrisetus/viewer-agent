@@ -37,22 +37,35 @@ export function DeviceView() {
 
   // ---- live (multi-monitor) ----
   const framesRef = useRef<Map<number, string>>(new Map());
+  const lastFrameAt = useRef<Map<number, number>>(new Map()); // monitor -> ts del último fotograma
   const [, forceFrame] = useState(0);
   const [liveOnline, setLiveOnline] = useState(false);
   const [liveView, setLiveView] = useState<'all' | number>('all');
-  const [seenMonitors, setSeenMonitors] = useState(0); // nº de pantallas que han enviado fotograma
   useEffect(() => {
     if (tab !== 'live') return;
     live.subscribe(id);
     const offF = live.onFrame((d, b64, _ts, monitor) => {
       if (d !== id) return;
       framesRef.current.set(monitor, `data:image/jpeg;base64,${b64}`);
-      setSeenMonitors((n) => Math.max(n, monitor + 1));
+      lastFrameAt.current.set(monitor, Date.now());
       forceFrame((n) => n + 1);
     });
     const offS = live.onStatus((d, online) => { if (d === id) setLiveOnline(online); });
-    return () => { live.unsubscribe(id); offF(); offS(); framesRef.current.clear(); setSeenMonitors(0); };
+    // Refresco periódico: si una pantalla deja de enviar, su tile desaparece.
+    const iv = window.setInterval(() => forceFrame((n) => n + 1), 3000);
+    return () => {
+      live.unsubscribe(id); offF(); offS(); window.clearInterval(iv);
+      framesRef.current.clear(); lastFrameAt.current.clear();
+    };
   }, [id, tab]);
+
+  // Pantallas activas = las que han enviado fotograma en los últimos 8 s.
+  const activeMonitors = (() => {
+    const now = Date.now();
+    let max = 0;
+    for (const [m, ts] of lastFrameAt.current) if (now - ts < 8000) max = Math.max(max, m + 1);
+    return max;
+  })();
 
   async function patch(body: Partial<Pick<Device, 'paused' | 'disabled' | 'label'>>) {
     try {
@@ -134,7 +147,7 @@ export function DeviceView() {
 
       {tab === 'live' && (
         <LiveView
-          monitorCount={Math.max(device?.monitorCount ?? 1, seenMonitors)}
+          monitorCount={activeMonitors > 0 ? activeMonitors : Math.max(1, device?.monitorCount ?? 1)}
           frames={framesRef.current}
           view={liveView}
           setView={setLiveView}
@@ -184,7 +197,11 @@ function LiveView({
   connecting: boolean;
 }) {
   const mons = Array.from({ length: Math.max(1, monitorCount) }, (_, i) => i);
-  const shown = view === 'all' ? mons : [view as number];
+  // Si la pantalla seleccionada ya no existe (se desconectó), vuelve a "Todas".
+  useEffect(() => {
+    if (typeof view === 'number' && view >= monitorCount) setView('all');
+  }, [view, monitorCount, setView]);
+  const shown = view === 'all' || (view as number) >= monitorCount ? mons : [view as number];
   const anyFrame = frames.size > 0;
 
   return (
@@ -265,16 +282,22 @@ function Playback({
 
   if (shots.length === 0) return <div className="card">No hay capturas en este rango.</div>;
 
-  const nMon = Math.max(monitorCount, monsPresent.length, 1);
+  const nMon = Math.max(monitorCount, (monsPresent[monsPresent.length - 1] ?? 0) + 1, 1);
   const t = times[Math.min(idx, times.length - 1)];
+  const tMs = new Date(t).getTime();
 
-  // Captura de la pantalla m más cercana (≤ t); si no hay, la primera.
-  const shotAt = (m: number): Shot | null => {
+  // Captura de la pantalla m en el instante t: la más cercana en el tiempo.
+  // Si la más cercana está a más de 3 min, esa pantalla no tenía señal entonces.
+  const shotAt = (m: number): { shot: Shot | null; stale: boolean } => {
     const arr = byMon.get(m);
-    if (!arr || arr.length === 0) return null;
+    if (!arr || arr.length === 0) return { shot: null, stale: false };
     let pick = arr[0];
     for (const s of arr) { if (s.capturedAt <= t) pick = s; else break; }
-    return pick;
+    // ¿hay alguna posterior más cercana?
+    const after = arr.find((s) => s.capturedAt > t);
+    const best = after && Math.abs(new Date(after.capturedAt).getTime() - tMs) < Math.abs(new Date(pick.capturedAt).getTime() - tMs) ? after : pick;
+    const stale = Math.abs(new Date(best.capturedAt).getTime() - tMs) > 180_000;
+    return { shot: best, stale };
   };
 
   const shown = view === 'all' ? monsPresent : [view as number];
@@ -285,14 +308,19 @@ function Playback({
 
       <div className={shown.length > 1 ? 'mon-grid' : ''}>
         {shown.map((m) => {
-          const s = shotAt(m);
+          const { shot: s, stale } = shotAt(m);
           return (
-            <div key={m} className="live-tile" style={{ cursor: view === 'all' && nMon > 1 ? 'zoom-in' : 'default' }}
+            <div key={m} className={`live-tile ${stale ? 'off' : ''}`} style={{ cursor: view === 'all' && nMon > 1 ? 'zoom-in' : 'default' }}
               onClick={() => { if (view === 'all' && nMon > 1) setView(m); }}>
-              {s
+              {s && !stale
                 ? <img src={authedUrl(`/api/screenshots/${s.id}/full`)} alt={s.capturedAt} style={{ aspectRatio: 'auto' }} />
-                : <div style={{ aspectRatio: '16/10', display: 'grid', placeItems: 'center', color: '#8a97a5' }}>Pantalla {m + 1} · sin capturas</div>}
-              {nMon > 1 && <div className="cap"><span>Pantalla {m + 1}</span>{s && <span className="muted">{fmtTime(s.capturedAt)}</span>}</div>}
+                : (
+                  <div style={{ aspectRatio: '16/10', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 12, color: '#8a97a5' }}>
+                    Pantalla {m + 1}<br />
+                    <small>{s ? `sin señal a esta hora (última: ${fmtTime(s.capturedAt)})` : 'sin capturas'}</small>
+                  </div>
+                )}
+              {nMon > 1 && <div className="cap"><span>Pantalla {m + 1}</span>{s && !stale && <span className="muted">{fmtTime(s.capturedAt)}</span>}</div>}
             </div>
           );
         })}

@@ -251,9 +251,12 @@ class Agent:
                 if interval > 0 and not r.get("paused") and (time.time() - self._last_shot) >= interval:
                     n = self.capturer.monitors()
                     for m in range(n):
-                        jpeg = self.capturer.grab_jpeg(
-                            m, int(r.get("maxImageEdgePx") or 1600), int(r.get("jpegQuality") or 55)
-                        )
+                        try:
+                            jpeg = self.capturer.grab_jpeg(
+                                m, int(r.get("maxImageEdgePx") or 1600), int(r.get("jpegQuality") or 55)
+                            )
+                        except IndexError:
+                            break  # pantalla desconectada a mitad; se recalcula en la próxima vuelta
                         self.buffer.put("screenshot_inline", {"capturedAt": _now_iso(), "monitor": m,
                                                               "b64": _b64(jpeg)})
                     self._last_shot = time.time()
@@ -276,7 +279,10 @@ class Agent:
                     for m in range(n):
                         if not self.ctrl.live_wanted or self._stop.is_set():
                             break
-                        jpeg = cap.grab_jpeg(m, edge, self.ctrl.live_quality)
+                        try:
+                            jpeg = cap.grab_jpeg(m, edge, self.ctrl.live_quality)
+                        except IndexError:
+                            break  # pantalla desconectada; se recalcula n en la próxima vuelta
                         self.ctrl.send_frame(jpeg, _now_iso(), monitor=m)
                     self._stop.wait(1.0 / fps)
                 else:
@@ -309,7 +315,7 @@ class Agent:
                     self.log(f"uploader: {e}")
             if self.ctrl:
                 hb += 1
-                if hb % 6 == 1:  # revisa el nº de pantallas ~cada minuto
+                if hb % 3 == 1:  # re-cuenta pantallas cada ~15 s (barato, mss nuevo)
                     try:
                         self.ctrl.set_monitor_count(count_monitors())
                     except Exception:
