@@ -6,6 +6,12 @@ import { hashSecret, requireDevice, findDeviceByCredentials } from '../deviceAut
 import { buildConfig, getSetting } from '../settings.js';
 import { classify } from '../productivity.js';
 import { storeScreenshot } from '../storage.js';
+import { createLimiter } from '../limiter.js';
+import { env } from '../env.js';
+
+// Portero global: como mucho N capturas procesándose a la vez en todo el
+// servidor, aunque lleguen 30 agentes a la vez. Acota el pico de RAM.
+const screenshotGate = createLimiter(env.screenshotConcurrency);
 import {
   registerAgent,
   unregisterAgent,
@@ -143,25 +149,27 @@ export async function agentRoutes(app: FastifyInstance) {
         if (part.fieldname === 'monitor') monitor = parseInt(String(part.value), 10) || 0;
       } else if (part.type === 'file' && part.fieldname === 'image') {
         const buf = await part.toBuffer();
-        const stored = await storeScreenshot(
-          device.id,
-          capturedAt,
-          monitor,
-          buf,
-          cfg.maxImageEdgePx,
-          cfg.jpegQuality,
-        );
-        await prisma.screenshot.create({
-          data: {
-            deviceId: device.id,
+        await screenshotGate(async () => {
+          const stored = await storeScreenshot(
+            device.id,
             capturedAt,
             monitor,
-            path: stored.path,
-            thumbPath: stored.thumbPath,
-            width: stored.width,
-            height: stored.height,
-            bytes: stored.bytes,
-          },
+            buf,
+            cfg.maxImageEdgePx,
+            cfg.jpegQuality,
+          );
+          await prisma.screenshot.create({
+            data: {
+              deviceId: device.id,
+              capturedAt,
+              monitor,
+              path: stored.path,
+              thumbPath: stored.thumbPath,
+              width: stored.width,
+              height: stored.height,
+              bytes: stored.bytes,
+            },
+          });
         });
         saved++;
       }

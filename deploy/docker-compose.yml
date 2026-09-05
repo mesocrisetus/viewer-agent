@@ -8,6 +8,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - db-data:/var/lib/postgresql/data
+    # Tope de memoria: si algo se desmadra, Docker reinicia SOLO este contenedor
+    # en vez de arrastrar a toda la VM a swap (que fue lo que pasó).
+    mem_limit: ${DB_MEM_LIMIT:-1g}
+    memswap_limit: ${DB_MEM_LIMIT:-1g}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
@@ -33,6 +37,15 @@ services:
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      # Capturas procesadas a la vez (pico de RAM lineal con este número).
+      SCREENSHOT_CONCURRENCY: ${SCREENSHOT_CONCURRENCY:-3}
+      # Mantiene a raya el heap de V8; la memoria de sharp/libvips es nativa y
+      # la acota el portero de concurrencia + mem_limit, no esta opción.
+      NODE_OPTIONS: "--max-old-space-size=1024"
+    # Tope duro de memoria del contenedor. Con 8 GB en la VM: ~2 GB al servidor,
+    # ~1 GB a la BD, resto para SO + nginx + margen.
+    mem_limit: ${SERVER_MEM_LIMIT:-2g}
+    memswap_limit: ${SERVER_MEM_LIMIT:-2g}
     volumes:
       # Las capturas viven en el host, fuera de cualquier imagen: sobreviven a
       # cada actualización del servicio.

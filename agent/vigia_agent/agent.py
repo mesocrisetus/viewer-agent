@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import getpass
 import platform
+import random
 import socket
 import sys
 import threading
@@ -244,10 +245,19 @@ class Agent:
 
     def _screenshot_loop(self) -> None:
         self.capturer = ScreenCapturer()
+        phase_set = False
         while not self._stop.is_set():
             try:
                 r = self.remote
                 interval = int(r.get("screenshotIntervalSec") or 0)
+                # Desfase inicial aleatorio dentro del intervalo: si se despliegan
+                # o reinician muchos agentes a la vez, evita que TODOS capturen y
+                # suban en el mismo segundo (la ráfaga que satura el servidor).
+                # Cada equipo se queda con una fase distinta y la carga se
+                # reparte de forma uniforme por todo el intervalo.
+                if interval > 0 and not phase_set:
+                    self._last_shot = time.time() - random.uniform(0, interval)
+                    phase_set = True
                 if interval > 0 and not r.get("paused") and (time.time() - self._last_shot) >= interval:
                     n = self.capturer.monitors()
                     for m in range(n):

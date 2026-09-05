@@ -17,4 +17,8 @@ export const env = {
   seedAdminEmail: process.env.SEED_ADMIN_EMAIL ?? 'admin@vigia.local',
   seedAdminPassword: process.env.SEED_ADMIN_PASSWORD ?? 'cambia-esta-clave',
   maxUploadMb: parseInt(process.env.MAX_UPLOAD_MB ?? '8', 10),
+  // Cuántas capturas se procesan a la vez (decodificar cabecera + generar
+  // miniatura). Sube el pico de RAM de forma lineal; 3 va sobrado para 25-40
+  // agentes con un servidor de 8 GB. Ver server/src/limiter.ts.
+  screenshotConcurrency: parseInt(process.env.SCREENSHOT_CONCURRENCY ?? '3', 10),
 };
