@@ -37,15 +37,18 @@ services:
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
-      # Capturas procesadas a la vez (pico de RAM lineal con este número).
-      SCREENSHOT_CONCURRENCY: ${SCREENSHOT_CONCURRENCY:-3}
-      # Mantiene a raya el heap de V8; la memoria de sharp/libvips es nativa y
-      # la acota el portero de concurrencia + mem_limit, no esta opción.
-      NODE_OPTIONS: "--max-old-space-size=1024"
-    # Tope duro de memoria del contenedor. Con 8 GB en la VM: ~2 GB al servidor,
+      # Capturas procesándose a la vez / esperando turno. Si la cola se llena,
+      # el servidor responde 503 y el agente reintenta desde su buffer local.
+      SCREENSHOT_CONCURRENCY: ${SCREENSHOT_CONCURRENCY:-4}
+      SCREENSHOT_QUEUE_MAX: ${SCREENSHOT_QUEUE_MAX:-48}
+      # Heap de V8. La memoria de sharp/libvips es nativa (no cuenta aquí) y la
+      # acotan el portero + mem_limit. Con holgura para que no crashee bajo
+      # ráfaga; el freno real es la cola acotada, no este número.
+      NODE_OPTIONS: "--max-old-space-size=2048"
+    # Tope duro de memoria del contenedor. Con 8 GB en la VM: ~3 GB al servidor,
     # ~1 GB a la BD, resto para SO + nginx + margen.
-    mem_limit: ${SERVER_MEM_LIMIT:-2g}
-    memswap_limit: ${SERVER_MEM_LIMIT:-2g}
+    mem_limit: ${SERVER_MEM_LIMIT:-3g}
+    memswap_limit: ${SERVER_MEM_LIMIT:-3g}
     volumes:
       # Las capturas viven en el host, fuera de cualquier imagen: sobreviven a
       # cada actualización del servicio.

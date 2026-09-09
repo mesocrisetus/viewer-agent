@@ -1,15 +1,27 @@
 /**
- * Portero de concurrencia sin dependencias.
+ * Portero de concurrencia con cola acotada (sin dependencias).
  *
- * Limita cuántas tareas pesadas (decodificar/recomprimir imágenes con sharp)
- * corren a la vez. Una ráfaga de 20-30 agentes subiendo capturas en el mismo
- * segundo ya no dispara 30 decodificaciones de bitmap en crudo en paralelo
- * (cada una son varios MB de RAM nativa): se procesan de N en N y el resto
- * espera unos milisegundos. El pico de memoria pasa a ser acotado y predecible
- * independientemente del tamaño de la flota.
+ * - `max`: cuántas tareas pesadas (sharp: decodificar cabecera + miniatura)
+ *   corren a la vez. Acota el pico de memoria NATIVA.
+ * - `maxQueued`: cuántas pueden estar ESPERANDO turno. Si se supera, `run()`
+ *   rechaza al instante con `OverloadError` en vez de encolar indefinidamente.
+ *   Esto es el backpressure: quien llama (la ruta HTTP) responde 503 y el
+ *   agente reintenta luego desde su buffer local. Sin este tope, una ráfaga
+ *   sostenida (p. ej. 20 agentes volcando backlog tras un redespliegue) hacía
+ *   crecer la cola sin límite -> cada entrada retiene su imagen + el contexto
+ *   de la petición -> el heap de Node explota y el proceso entra en bucle de
+ *   caída.
  */
-export function createLimiter(max: number) {
+export class OverloadError extends Error {
+  constructor() {
+    super('OVERLOADED');
+    this.name = 'OverloadError';
+  }
+}
+
+export function createLimiter(max: number, maxQueued = 40) {
   const limit = Math.max(1, max | 0);
+  const capacity = Math.max(1, maxQueued | 0);
   let active = 0;
   const queue: (() => void)[] = [];
 
@@ -20,7 +32,8 @@ export function createLimiter(max: number) {
     }
   };
 
-  return function run<T>(task: () => Promise<T>): Promise<T> {
+  const run = <T>(task: () => Promise<T>): Promise<T> => {
+    if (queue.length >= capacity) return Promise.reject(new OverloadError());
     return new Promise<T>((resolve, reject) => {
       queue.push(() => {
         task()
@@ -33,4 +46,7 @@ export function createLimiter(max: number) {
       pump();
     });
   };
+
+  run.stats = () => ({ active, queued: queue.length, limit, capacity });
+  return run;
 }

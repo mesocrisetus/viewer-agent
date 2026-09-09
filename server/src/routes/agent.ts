@@ -6,12 +6,14 @@ import { hashSecret, requireDevice, findDeviceByCredentials } from '../deviceAut
 import { buildConfig, getSetting } from '../settings.js';
 import { classify } from '../productivity.js';
 import { storeScreenshot } from '../storage.js';
-import { createLimiter } from '../limiter.js';
+import { createLimiter, OverloadError } from '../limiter.js';
 import { env } from '../env.js';
 
 // Portero global: como mucho N capturas procesándose a la vez en todo el
-// servidor, aunque lleguen 30 agentes a la vez. Acota el pico de RAM.
-const screenshotGate = createLimiter(env.screenshotConcurrency);
+// servidor y como mucho M esperando turno. Si se llena, la ruta responde 503 y
+// el agente reintenta luego desde su buffer local (sin pérdida de datos). Acota
+// el pico de RAM aunque 20 agentes vuelquen su backlog a la vez.
+const screenshotGate = createLimiter(env.screenshotConcurrency, env.screenshotQueueMax);
 import {
   registerAgent,
   unregisterAgent,
@@ -143,38 +145,54 @@ export async function agentRoutes(app: FastifyInstance) {
     let monitor = 0;
     let saved = 0;
 
+    let overloaded = false;
     for await (const part of parts) {
       if (part.type === 'field') {
         if (part.fieldname === 'capturedAt') capturedAt = new Date(String(part.value));
         if (part.fieldname === 'monitor') monitor = parseInt(String(part.value), 10) || 0;
       } else if (part.type === 'file' && part.fieldname === 'image') {
+        if (overloaded) {
+          part.file.resume(); // servidor saturado: descarta el stream sin bufferizar
+          continue;
+        }
         const buf = await part.toBuffer();
-        await screenshotGate(async () => {
-          const stored = await storeScreenshot(
-            device.id,
-            capturedAt,
-            monitor,
-            buf,
-            cfg.maxImageEdgePx,
-            cfg.jpegQuality,
-          );
-          await prisma.screenshot.create({
-            data: {
-              deviceId: device.id,
+        try {
+          await screenshotGate(async () => {
+            const stored = await storeScreenshot(
+              device.id,
               capturedAt,
               monitor,
-              path: stored.path,
-              thumbPath: stored.thumbPath,
-              width: stored.width,
-              height: stored.height,
-              bytes: stored.bytes,
-            },
+              buf,
+              cfg.maxImageEdgePx,
+              cfg.jpegQuality,
+            );
+            await prisma.screenshot.create({
+              data: {
+                deviceId: device.id,
+                capturedAt,
+                monitor,
+                path: stored.path,
+                thumbPath: stored.thumbPath,
+                width: stored.width,
+                height: stored.height,
+                bytes: stored.bytes,
+              },
+            });
           });
-        });
-        saved++;
+          saved++;
+        } catch (e) {
+          if (e instanceof OverloadError) overloaded = true;
+          else throw e;
+        }
+      } else if (part.type === 'file') {
+        part.file.resume(); // parte de fichero inesperada: descártala
       }
     }
     await prisma.device.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } });
+    if (overloaded) {
+      // El agente conserva estas capturas en su buffer local y las reintenta.
+      return reply.code(503).send({ ok: false, saved, error: 'overloaded' });
+    }
     return reply.send({ ok: true, saved });
   });
 
